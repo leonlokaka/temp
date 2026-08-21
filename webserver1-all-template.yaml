@@ -1,0 +1,88 @@
+kind: Project
+apiVersion: project.openshift.io/v1
+metadata:
+  name: webserver1
+spec:
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: anyuid-sa
+  namespace: webserver1
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: anyuid-sa-webserver1
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+subjects:
+- kind: ServiceAccount
+  name: anyuid-sa
+  namespace: webserver1
+
+---
+apiVersion: v1
+kind: Service
+namespace: webserver1
+metadata:
+  name: webserver1-service
+spec:
+  selector:
+    app: webserver1
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  - name: https
+    protocol: TCP
+    port: 443
+    targetPort: 443
+  type: ClusterIP
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+namespace: webserver1
+metadata:
+  name: webserver1-route
+spec:
+  to:
+    kind: Service
+    name: webserver1-service
+  port:
+    targetPort: 80
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+  wildcardPolicy: None
+
+---
+apiVersion: apps/v1
+kind: Deployment
+namespace: webserver1
+metadata:
+  name: webserver1
+  labels:
+    app: webserver1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webserver1
+  template:
+    metadata:
+      labels:
+        app: webserver1
+    spec:
+      serviceAccountName: anyuid-sa
+      containers:
+      - name: webserver1
+        image: docker.io/library/nginx:stable-alpine3.23
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        - containerPort: 443
